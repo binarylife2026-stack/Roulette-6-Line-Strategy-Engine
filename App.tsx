@@ -10,6 +10,7 @@ export default function App() {
   const [lastSpins, setLastSpins] = useState<number[]>([]);
   const [result, setResult] = useState<StrategyResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [maxLines, setMaxLines] = useState<number>(1);
   
   const [previousSuggestions, setPreviousSuggestions] = useState<number[]>([]);
   const [isHit, setIsHit] = useState(false);
@@ -18,7 +19,7 @@ export default function App() {
     const trimmedHistory = historyData.trim();
     if (trimmedHistory !== '' && lastSpins.length >= 1) {
       const parsedHistory = parseNumberInput(trimmedHistory);
-      const analysis = analyzeStrategy(parsedHistory, lastSpins);
+      const analysis = analyzeStrategy(parsedHistory, lastSpins, maxLines);
       
       if (analysis) {
         setResult(analysis);
@@ -30,10 +31,9 @@ export default function App() {
       setResult(null);
       setHasSearched(false);
     }
-  }, [historyData, lastSpins]);
+  }, [historyData, lastSpins, maxLines]);
 
   const addNumber = (num: number) => {
-    // Check for Hit
     if (previousSuggestions.includes(num)) {
       setIsHit(true);
       setTimeout(() => setIsHit(false), 2500);
@@ -41,7 +41,6 @@ export default function App() {
       setIsHit(false);
     }
 
-    // Auto-update history string
     setHistoryData(prev => {
       const trimmed = prev.trim();
       if (!trimmed) return num.toString();
@@ -49,7 +48,6 @@ export default function App() {
       return trimmed + separator + num;
     });
 
-    // Update current session display
     setLastSpins(prev => {
       const next = [...prev, num];
       return next.length > 12 ? next.slice(1) : next;
@@ -165,9 +163,26 @@ export default function App() {
           <div className="bg-[#0f172a] border-2 border-amber-500/30 p-6 md:p-8 rounded-3xl shadow-2xl flex-1 flex flex-col relative overflow-hidden min-h-[500px]">
             <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none"></div>
             
-            <h2 className="text-xs font-black text-amber-500 uppercase mb-8 text-center tracking-[0.3em] border-b border-slate-800 pb-5">
-              Live AI Result
-            </h2>
+            <div className="flex justify-between items-center border-b border-slate-800 pb-5 mb-8">
+              <h2 className="text-xs font-black text-amber-500 uppercase tracking-[0.3em]">
+                Live AI Result
+              </h2>
+              {/* Line Toggle Switch */}
+              <div className="flex bg-slate-900/80 p-1 rounded-full border border-slate-800">
+                <button 
+                  onClick={() => setMaxLines(1)}
+                  className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${maxLines === 1 ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  1 Line
+                </button>
+                <button 
+                  onClick={() => setMaxLines(2)}
+                  className={`px-3 py-1 rounded-full text-[9px] font-black uppercase transition-all ${maxLines === 2 ? 'bg-amber-500 text-slate-950' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  2 Lines
+                </button>
+              </div>
+            </div>
 
             <div className="flex-1 space-y-8">
               {!hasSearched ? (
@@ -205,9 +220,12 @@ export default function App() {
                     <p className={`text-[11px] font-black uppercase mb-3 tracking-[0.4em] ${isHit ? 'text-white' : 'text-amber-500'}`}>
                       {isHit ? 'TARGET HIT!' : 'SUGGESTED BET'}
                     </p>
-                    <p className="text-2xl md:text-4xl font-black text-white">
+                    <p className="text-2xl md:text-3xl font-black text-white leading-tight">
                       {result.suggestedLines.map(id => SIX_LINES.find(l => l.id === id)?.name).join(' & ')}
                     </p>
+                    {result.suggestedLines.length > 1 && (
+                      <p className="text-[10px] text-amber-500/60 font-black uppercase mt-2 tracking-widest">Dual Line Strategy</p>
+                    )}
                   </div>
 
                   <div>
@@ -218,7 +236,6 @@ export default function App() {
                         <span className="text-[10px] text-emerald-400 font-black uppercase">Found Match</span>
                       </div>
                     </div>
-                    {/* Responsive Grid for Targets */}
                     <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-2">
                       {result.suggestedNumbers.map(num => {
                         const isFoundInHistory = result.foundNumbers.includes(num);
