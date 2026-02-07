@@ -11,11 +11,9 @@ export default function App() {
   const [result, setResult] = useState<StrategyResult | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   
-  // Track previous suggestions to detect "Hits"
   const [previousSuggestions, setPreviousSuggestions] = useState<number[]>([]);
   const [isHit, setIsHit] = useState(false);
 
-  // Auto-analyze whenever inputs change
   useEffect(() => {
     const trimmedHistory = historyData.trim();
     if (trimmedHistory !== '' && lastSpins.length >= 1) {
@@ -35,15 +33,15 @@ export default function App() {
   }, [historyData, lastSpins]);
 
   const addNumber = (num: number) => {
-    // 1. Check if this number was a "Hit" based on previous prediction
+    // Check for Hit
     if (previousSuggestions.includes(num)) {
       setIsHit(true);
-      setTimeout(() => setIsHit(false), 3000);
+      setTimeout(() => setIsHit(false), 2500);
     } else {
       setIsHit(false);
     }
 
-    // 2. Auto-Add to History Data string
+    // Auto-update history string
     setHistoryData(prev => {
       const trimmed = prev.trim();
       if (!trimmed) return num.toString();
@@ -51,15 +49,13 @@ export default function App() {
       return trimmed + separator + num;
     });
 
-    // 3. Update Current Session Sequence
+    // Update current session display
     setLastSpins(prev => {
       const next = [...prev, num];
-      if (next.length > 12) return next.slice(1);
-      return next;
+      return next.length > 12 ? next.slice(1) : next;
     });
   };
 
-  // Keep track of what we suggested *before* the next click
   useEffect(() => {
     if (result) {
       setPreviousSuggestions(result.suggestedNumbers);
@@ -80,128 +76,150 @@ export default function App() {
   };
 
   const clearHistory = () => {
-    if (window.confirm("Clear all history data?")) {
+    if (window.confirm("Delete history database?")) {
       setHistoryData('');
     }
   };
 
   return (
-    <div className="min-h-screen casino-gradient p-4 flex flex-col items-center">
-      <header className="w-full max-w-5xl mb-4 text-center">
-        <h1 className="text-2xl md:text-3xl font-black gold-text tracking-tighter uppercase italic">
-          Professional 6-Line Engine
+    <div className="casino-gradient p-3 md:p-6 lg:p-8 flex flex-col items-center">
+      <header className="w-full max-w-6xl mb-6 text-center">
+        <h1 className="text-3xl md:text-5xl font-black gold-text tracking-tighter uppercase italic">
+          6-Line Strategy Engine
         </h1>
-        <div className="h-0.5 w-32 bg-amber-500/50 mx-auto mt-1"></div>
+        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em] mt-2">
+          Professional Pattern Analysis Pro v2.5
+        </p>
       </header>
 
-      <main className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* Step 1: History Database */}
-        <div className="lg:col-span-3 flex flex-col gap-4">
-          <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-xl shadow-2xl flex-1 flex flex-col">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-[10px] font-bold text-amber-500 uppercase tracking-widest">1. History Database (Auto-Update)</h2>
-              <button onClick={clearHistory} className="text-[9px] text-red-500 hover:text-red-400 font-bold uppercase transition-colors">Clear</button>
+        {/* Left Col: Database */}
+        <div className="lg:col-span-3 h-full flex flex-col order-2 lg:order-1">
+          <div className="bg-[#0f172a] border border-slate-800 p-5 rounded-3xl shadow-2xl flex flex-col min-h-[300px] lg:h-[600px]">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-[11px] font-black text-amber-500 uppercase tracking-widest">Database</h2>
+              <button onClick={clearHistory} className="text-[10px] text-red-500 hover:text-red-400 font-bold uppercase transition-colors px-3 py-1 bg-red-500/10 rounded-full">Reset</button>
             </div>
             <textarea
-              className="flex-1 w-full bg-[#020617] border border-slate-800 rounded-lg p-3 text-[11px] font-mono text-emerald-500 focus:outline-none focus:ring-1 focus:ring-amber-500/30 resize-none transition-all"
-              placeholder="Numbers auto-populate here as you click..."
+              className="flex-1 w-full bg-[#020617] border border-slate-800 rounded-2xl p-4 text-xs font-mono text-emerald-500 focus:outline-none focus:ring-1 focus:ring-amber-500/30 resize-none leading-relaxed"
+              placeholder="Click numbers to auto-populate history..."
               value={historyData}
               onChange={(e) => setHistoryData(e.target.value)}
             />
-            <div className="mt-3 p-2 bg-slate-900 rounded border border-slate-800 text-[9px] text-slate-500 text-center uppercase font-bold">
-              Editing history will update AI live
+            <div className="mt-4 p-3 bg-slate-900/50 rounded-xl border border-slate-800 text-[9px] text-slate-400 text-center font-bold tracking-widest">
+              DATABASE ENGINE: ACTIVE
             </div>
           </div>
         </div>
 
-        {/* Step 2: Keypad */}
-        <div className="lg:col-span-5">
-          <div className="bg-[#0f172a] border border-slate-800 p-4 rounded-xl shadow-2xl relative">
+        {/* Center Col: Keypad */}
+        <div className="lg:col-span-5 order-1 lg:order-2">
+          <div className="bg-[#0f172a] border border-slate-800 p-5 md:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
             {isHit && (
-              <div className="absolute inset-0 bg-emerald-500/10 pointer-events-none border-4 border-emerald-500/50 rounded-xl z-10 animate-pulse flex items-center justify-center">
-                <span className="text-emerald-400 text-6xl font-black rotate-[-12deg] drop-shadow-[0_0_20px_rgba(16,185,129,0.8)]">HIT!</span>
+              <div className="absolute inset-0 bg-emerald-500/20 pointer-events-none border-8 border-emerald-500/40 rounded-3xl z-30 animate-pulse flex items-center justify-center backdrop-blur-[2px]">
+                <span className="text-emerald-400 text-7xl md:text-9xl font-black rotate-[-12deg] drop-shadow-[0_0_40px_rgba(16,185,129,1)] scale-110">HIT!</span>
               </div>
             )}
             
-            <h2 className="text-[10px] font-bold text-amber-500 uppercase mb-4 text-center tracking-widest">2. Input Latest Spins</h2>
+            <h2 className="text-[11px] font-black text-amber-500 uppercase mb-6 text-center tracking-[0.4em]">
+              Numeric Input Pad
+            </h2>
             
-            <div className="grid grid-cols-3 gap-1.5 mb-4">
-              <button onClick={() => addNumber(0)} className="col-span-3 py-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-lg border-b-4 border-emerald-900 transition-all active:translate-y-0.5 active:border-b-0 shadow-md">0</button>
-              {Array.from({ length: 12 }, (_, col) => (
-                <div key={col} className="flex flex-col gap-1.5">
-                  {[1, 2, 3].map(row => {
-                    const num = col * 3 + row;
-                    const isRed = RED_NUMBERS.includes(num);
-                    return (
-                      <button
-                        key={num}
-                        onClick={() => addNumber(num)}
-                        className={`py-3.5 rounded-lg font-black text-lg border-b-4 transition-all active:translate-y-0.5 active:border-b-0 shadow-md ${isRed ? 'bg-red-700 hover:bg-red-600 border-red-900 text-white' : 'bg-slate-800 hover:bg-slate-700 border-slate-950 text-white'}`}
-                      >
-                        {num}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+            <div className="grid grid-cols-3 gap-2 md:gap-3 mb-8">
+              <button 
+                onClick={() => addNumber(0)} 
+                className="col-span-3 py-5 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-2xl rounded-2xl border-b-8 border-emerald-900 transition-all active:translate-y-2 active:border-b-0 shadow-2xl"
+              >
+                0
+              </button>
+              
+              {Array.from({ length: 36 }, (_, i) => {
+                const num = i + 1;
+                const isRed = RED_NUMBERS.includes(num);
+                return (
+                  <button
+                    key={num}
+                    onClick={() => addNumber(num)}
+                    className={`py-5 md:py-7 rounded-2xl font-black text-2xl border-b-8 transition-all active:translate-y-2 active:border-b-0 shadow-lg ${
+                      isRed 
+                        ? 'bg-red-700 hover:bg-red-600 border-red-900 text-white' 
+                        : 'bg-slate-800 hover:bg-slate-700 border-slate-950 text-white'
+                    }`}
+                  >
+                    {num}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="flex gap-2">
-              <button onClick={undoLast} className="flex-1 py-2 bg-slate-800 text-slate-400 text-[10px] font-bold rounded uppercase border border-slate-700">Undo Last</button>
-              <button onClick={clearSession} className="flex-1 py-2 bg-slate-800 text-slate-400 text-[10px] font-bold rounded uppercase border border-slate-700">Clear Session</button>
+            <div className="grid grid-cols-2 gap-4">
+              <button onClick={undoLast} className="py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-black rounded-2xl uppercase border border-slate-700 transition-all">Undo</button>
+              <button onClick={clearSession} className="py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-black rounded-2xl uppercase border border-slate-700 transition-all">Clear</button>
             </div>
           </div>
         </div>
 
-        {/* Step 3: Result */}
-        <div className="lg:col-span-4 flex flex-col gap-4">
-          <div className="bg-[#0f172a] border-2 border-amber-500/30 p-5 rounded-xl shadow-2xl flex-1 flex flex-col relative overflow-hidden">
-            <h2 className="text-xs font-black text-amber-500 uppercase mb-5 text-center tracking-[0.2em] border-b border-slate-800 pb-3">
-              AI Analysis Result
+        {/* Right Col: AI Results */}
+        <div className="lg:col-span-4 flex flex-col h-full order-3">
+          <div className="bg-[#0f172a] border-2 border-amber-500/30 p-6 md:p-8 rounded-3xl shadow-2xl flex-1 flex flex-col relative overflow-hidden min-h-[500px]">
+            <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none"></div>
+            
+            <h2 className="text-xs font-black text-amber-500 uppercase mb-8 text-center tracking-[0.3em] border-b border-slate-800 pb-5">
+              Live AI Result
             </h2>
 
-            <div className="flex-1">
+            <div className="flex-1 space-y-8">
               {!hasSearched ? (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-30">
-                  <p className="text-slate-500 text-[11px] font-medium max-w-[180px] leading-relaxed">
-                    INPUT A NUMBER TO START LIVE SCANNING
+                <div className="h-full flex flex-col items-center justify-center text-center opacity-30">
+                  <div className="w-20 h-20 rounded-full border-4 border-dashed border-slate-600 animate-spin flex items-center justify-center mb-6">
+                    <div className="w-10 h-10 rounded-full bg-slate-700"></div>
+                  </div>
+                  <p className="text-slate-500 text-xs font-black uppercase tracking-widest">
+                    Awaiting First Spin
                   </p>
                 </div>
               ) : !result ? (
-                <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="text-red-500 text-sm font-bold uppercase tracking-widest bg-red-500/10 p-4 rounded-lg border border-red-500/20">
-                    No Pattern Match
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="text-red-500 text-lg font-black uppercase tracking-widest bg-red-500/10 p-6 rounded-3xl border border-red-500/20 mb-4">
+                    NO MATCH
                   </div>
-                  <p className="text-slate-500 text-[10px] max-w-[200px]">
-                    This sequence is unique in your database. Keep playing to build patterns.
+                  <p className="text-slate-500 text-[11px] font-bold leading-relaxed px-4">
+                    The current sequence was not found in the database. Continue clicking numbers to expand pattern recognition.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-                      <p className="text-slate-500 text-[9px] font-bold uppercase mb-1">Match Level</p>
-                      <p className="text-lg font-black text-white leading-none">Lvl {result.searchLevel}</p>
+                <div className="space-y-8 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                  <div className="grid grid-cols-2 gap-4 md:gap-5">
+                    <div className="bg-slate-950 p-4 md:p-5 rounded-2xl border border-slate-800 shadow-inner">
+                      <p className="text-slate-500 text-[10px] font-black uppercase mb-1 tracking-widest">Precision</p>
+                      <p className="text-2xl md:text-3xl font-black text-white">Lvl {result.searchLevel}</p>
                     </div>
-                    <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-800/50">
-                      <p className="text-slate-500 text-[9px] font-bold uppercase mb-1">Frequency</p>
-                      <p className="text-lg font-black text-emerald-400 leading-none">{result.patternMatches}x</p>
+                    <div className="bg-slate-950 p-4 md:p-5 rounded-2xl border border-slate-800 shadow-inner">
+                      <p className="text-slate-500 text-[10px] font-black uppercase mb-1 tracking-widest">Frequency</p>
+                      <p className="text-2xl md:text-3xl font-black text-emerald-400">{result.patternMatches}x</p>
                     </div>
                   </div>
 
-                  <div className={`p-4 border rounded-xl text-center shadow-inner transition-all duration-500 ${isHit ? 'bg-emerald-500/20 border-emerald-500 shadow-emerald-500/20 scale-105' : 'bg-amber-500/5 border-amber-500/20'}`}>
-                    <p className={`text-[9px] font-black uppercase mb-1.5 tracking-widest ${isHit ? 'text-emerald-400' : 'text-amber-500'}`}>
-                      {isHit ? 'LAST BET WAS A HIT!' : 'NEXT SUGGESTED BETS'}
+                  <div className={`p-6 border-2 rounded-3xl text-center shadow-2xl transition-all duration-700 ${isHit ? 'bg-emerald-600 border-emerald-400 scale-105 shadow-emerald-500/40' : 'bg-slate-950 border-amber-500/50'}`}>
+                    <p className={`text-[11px] font-black uppercase mb-3 tracking-[0.4em] ${isHit ? 'text-white' : 'text-amber-500'}`}>
+                      {isHit ? 'TARGET HIT!' : 'SUGGESTED BET'}
                     </p>
-                    <p className="text-xl md:text-2xl font-black text-white">
-                      {result.suggestedLines.map(id => SIX_LINES.find(l => l.id === id)?.name).join(' and ')}
+                    <p className="text-2xl md:text-4xl font-black text-white">
+                      {result.suggestedLines.map(id => SIX_LINES.find(l => l.id === id)?.name).join(' & ')}
                     </p>
                   </div>
 
                   <div>
-                    <p className="text-slate-500 text-[9px] font-bold uppercase mb-2 text-center">Numbers to Bet (Green = Found in History)</p>
-                    <div className="grid grid-cols-6 gap-1.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
+                      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Winning Targets</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]"></div>
+                        <span className="text-[10px] text-emerald-400 font-black uppercase">Found Match</span>
+                      </div>
+                    </div>
+                    {/* Responsive Grid for Targets */}
+                    <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-2">
                       {result.suggestedNumbers.map(num => {
                         const isFoundInHistory = result.foundNumbers.includes(num);
                         const isCurrentLast = lastSpins[lastSpins.length - 1] === num;
@@ -209,14 +227,14 @@ export default function App() {
                         return (
                           <div 
                             key={num} 
-                            className={`py-1.5 text-center rounded text-xs font-black border transition-all duration-300 ${
+                            className={`aspect-square flex items-center justify-center rounded-xl text-sm md:text-base font-black border transition-all duration-500 ${
                               isCurrentLast 
-                                ? 'bg-emerald-500 border-emerald-400 text-white scale-110 shadow-lg shadow-emerald-500/50 z-20' 
+                                ? 'bg-emerald-500 border-emerald-300 text-white scale-125 shadow-[0_0_25px_rgba(16,185,129,1)] z-40' 
                                 : isFoundInHistory
-                                  ? 'bg-emerald-900/40 border-emerald-500 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]' 
+                                  ? 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110 ring-2 ring-emerald-500/20' 
                                   : RED_NUMBERS.includes(num) 
-                                    ? 'bg-red-950/30 border-red-900/50 text-red-400' 
-                                    : 'bg-slate-950 border-slate-800 text-amber-400'
+                                    ? 'bg-red-950/40 border-red-900/60 text-red-500' 
+                                    : 'bg-slate-950 border-slate-800 text-amber-500/40'
                             }`}
                           >
                             {num}
@@ -230,11 +248,20 @@ export default function App() {
             </div>
 
             {lastSpins.length > 0 && (
-              <div className="mt-6 pt-4 border-t border-slate-800/50">
-                <p className="text-[10px] text-slate-500 uppercase font-bold mb-3 tracking-widest">Recent Sequence</p>
-                <div className="flex flex-wrap gap-2.5">
+              <div className="mt-10 pt-6 border-t border-slate-800/80">
+                <p className="text-[10px] text-slate-600 uppercase font-black mb-5 tracking-[0.5em] text-center">Sequence History</p>
+                <div className="flex flex-wrap justify-center gap-2 md:gap-3">
                   {lastSpins.map((n, i) => (
-                    <div key={i} className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-black shadow-lg border-2 border-slate-900/50 transition-all ${RED_NUMBERS.includes(n) ? 'bg-[#b91c1c] text-white shadow-red-900/20' : n === 0 ? 'bg-[#15803d] text-white shadow-green-900/20' : 'bg-[#1e293b] text-white border-slate-700/50'}`}>
+                    <div 
+                      key={i} 
+                      className={`w-9 h-9 md:w-11 md:h-11 rounded-full flex items-center justify-center text-sm md:text-base font-black shadow-xl border-2 transition-all hover:scale-110 ${
+                        RED_NUMBERS.includes(n) 
+                          ? 'bg-red-700 border-red-500 text-white' 
+                          : n === 0 
+                            ? 'bg-emerald-600 border-emerald-400 text-white' 
+                            : 'bg-slate-900 border-slate-700 text-white'
+                      }`}
+                    >
                       {n}
                     </div>
                   ))}
@@ -246,8 +273,8 @@ export default function App() {
 
       </main>
 
-      <footer className="mt-8 text-slate-700 text-[10px] uppercase font-bold tracking-[0.4em] opacity-40">
-        AI Live Tracking Mode • Professional Analysis
+      <footer className="mt-16 mb-8 text-slate-800 text-[10px] uppercase font-black tracking-[0.6em] opacity-30 text-center">
+        Proprietary Engine - Professional Series - v2.5.1
       </footer>
     </div>
   );
