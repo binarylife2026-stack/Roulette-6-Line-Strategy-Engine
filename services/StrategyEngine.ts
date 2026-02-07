@@ -1,5 +1,5 @@
 
-import { StrategyResult, SIX_LINES } from '../types.ts';
+import { StrategyResult, SIX_LINES, CORNERS, BetDefinition } from '../types.ts';
 
 export const parseNumberInput = (input: string): number[] => {
   return input
@@ -10,15 +10,16 @@ export const parseNumberInput = (input: string): number[] => {
     .filter(n => !isNaN(n));
 };
 
-export const getLineForNumber = (num: number): number | null => {
-  const foundLine = SIX_LINES.find(line => line.numbers.includes(num));
-  return foundLine ? foundLine.id : null;
+export const getBetsForNumber = (num: number, type: '6-LINE' | 'CORNER'): number[] => {
+  const source = type === '6-LINE' ? SIX_LINES : CORNERS;
+  return source.filter(bet => bet.numbers.includes(num)).map(bet => bet.id);
 };
 
 export const analyzeStrategy = (
   history: number[],
   lastSpins: number[],
-  maxLines: number = 1
+  maxBets: number = 1,
+  betType: '6-LINE' | 'CORNER' = '6-LINE'
 ): StrategyResult | null => {
   if (history.length === 0 || lastSpins.length < 1) return null;
 
@@ -49,32 +50,34 @@ export const analyzeStrategy = (
 
   if (matches.length === 0) return null;
 
-  const lineFrequencies: Record<number, number> = {};
+  const betFrequencies: Record<number, number> = {};
   matches.forEach(num => {
-    const lineId = getLineForNumber(num);
-    if (lineId !== null) {
-      lineFrequencies[lineId] = (lineFrequencies[lineId] || 0) + 1;
-    }
+    const betIds = getBetsForNumber(num, betType);
+    betIds.forEach(id => {
+      betFrequencies[id] = (betFrequencies[id] || 0) + 1;
+    });
   });
 
-  const sortedLines = Object.entries(lineFrequencies)
+  const sortedBets = Object.entries(betFrequencies)
     .map(([id, count]) => ({ id: parseInt(id), count }))
     .sort((a, b) => b.count - a.count);
 
-  const selectedLineIds = sortedLines.slice(0, maxLines).map(l => l.id);
+  const selectedBetIds = sortedBets.slice(0, maxBets).map(b => b.id);
   
-  if (selectedLineIds.length === 0) return null;
+  if (selectedBetIds.length === 0) return null;
 
-  const suggestedNumbers = SIX_LINES
-    .filter(line => selectedLineIds.includes(line.id))
-    .flatMap(line => line.numbers)
+  const source = betType === '6-LINE' ? SIX_LINES : CORNERS;
+  const suggestedNumbers = source
+    .filter(bet => selectedBetIds.includes(bet.id))
+    .flatMap(bet => bet.numbers)
     .sort((a, b) => a - b);
 
   return {
     searchLevel,
     patternMatches: matches.length,
-    suggestedLines: selectedLineIds,
-    suggestedNumbers,
-    foundNumbers: Array.from(new Set(matches))
+    suggestedIds: selectedBetIds,
+    suggestedNumbers: Array.from(new Set(suggestedNumbers)),
+    foundNumbers: Array.from(new Set(matches)),
+    betType
   };
 };
