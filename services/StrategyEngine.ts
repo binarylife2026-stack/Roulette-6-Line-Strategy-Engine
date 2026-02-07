@@ -1,5 +1,5 @@
 
-import { StrategyResult, SIX_LINES, CORNERS, BetDefinition } from '../types.ts';
+import { StrategyResult, SIX_LINES, CORNERS, BetDefinition } from '../types';
 
 export const parseNumberInput = (input: string): number[] => {
   return input

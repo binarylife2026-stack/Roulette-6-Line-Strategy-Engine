@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { parseNumberInput, analyzeStrategy } from './services/StrategyEngine.ts';
-import { StrategyResult, SIX_LINES, CORNERS } from './types.ts';
+import { parseNumberInput, analyzeStrategy } from './services/StrategyEngine';
+import { StrategyResult, SIX_LINES, CORNERS } from './types';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 33, 34, 36];
 const BASE_STAKE = 5;
@@ -427,7 +427,7 @@ export default function App() {
       </main>
 
       <footer className="mt-16 mb-8 text-slate-800 text-[10px] uppercase font-black tracking-[0.6em] opacity-30 text-center">
-        Proprietary Engine - Professional Series - v3.0.0
+        Proprietary Engine - Professional Series - v3.0.1
       </footer>
     </div>
   );
