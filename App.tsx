@@ -6,6 +6,13 @@ import { StrategyResult, SIX_LINES, CORNERS } from './types';
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 33, 34, 36];
 const BASE_STAKE = 5;
 
+// Horizontal Pad Mapping (Top down matching common table layout)
+const ROULETTE_ROWS = [
+  [3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 36],
+  [2, 5, 8, 11, 14, 17, 20, 23, 26, 29, 32, 35],
+  [1, 4, 7, 10, 13, 16, 19, 22, 25, 28, 31, 34]
+];
+
 interface Transaction {
   type: 'WIN' | 'LOSS';
   betType: '6-LINE' | 'CORNER';
@@ -22,6 +29,7 @@ export default function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [maxLines, setMaxLines] = useState<number>(1);
   const [selectedBetType, setSelectedBetType] = useState<'6-LINE' | 'CORNER'>('6-LINE');
+  const [engineProtocol, setEngineProtocol] = useState<'HOT' | 'LESS-HOT'>('HOT');
   
   // Money Management State
   const [totalPL, setTotalPL] = useState<number>(0);
@@ -37,14 +45,15 @@ export default function App() {
     numbers: number[], 
     unit: number, 
     lineCount: number,
-    betType: '6-LINE' | 'CORNER'
+    betType: '6-LINE' | 'CORNER',
+    hotness: 'HOT' | 'LESS-HOT'
   } | null>(null);
 
   useEffect(() => {
     const trimmedHistory = historyData.trim();
     if (trimmedHistory !== '' && lastSpins.length >= 1) {
       const parsedHistory = parseNumberInput(trimmedHistory);
-      const analysis = analyzeStrategy(parsedHistory, lastSpins, maxLines, selectedBetType);
+      const analysis = analyzeStrategy(parsedHistory, lastSpins, maxLines, selectedBetType, engineProtocol);
       
       if (analysis) {
         setResult(analysis);
@@ -53,7 +62,8 @@ export default function App() {
           numbers: analysis.suggestedNumbers,
           unit: currentUnit,
           lineCount: analysis.suggestedIds.length,
-          betType: analysis.betType
+          betType: analysis.betType,
+          hotness: analysis.hotness
         };
       } else {
         setResult(null);
@@ -64,7 +74,7 @@ export default function App() {
       setHasSearched(false);
       activeBetRef.current = null;
     }
-  }, [historyData, lastSpins, maxLines, currentUnit, selectedBetType]);
+  }, [historyData, lastSpins, maxLines, currentUnit, selectedBetType, engineProtocol]);
 
   const addNumber = (num: number) => {
     const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'});
@@ -73,8 +83,6 @@ export default function App() {
       const { numbers, unit, lineCount, betType } = activeBetRef.current;
       const stakePerLine = unit * BASE_STAKE;
       const totalStake = stakePerLine * lineCount;
-      
-      // 1:5 for 6-line, 1:8 for Corner (8 to 1 payout)
       const multiplier = betType === '6-LINE' ? 5 : 8;
 
       if (numbers.includes(num)) {
@@ -86,6 +94,7 @@ export default function App() {
         setIsHit(true);
         setConsecutiveLosses(0);
         setCurrentUnit(prev => Math.max(1, prev - 1));
+        setEngineProtocol('LESS-HOT');
         
         const math = lineCount === 1 
           ? `(${stakePerLine} × ${multiplier}) = +${netProfit}` 
@@ -95,12 +104,13 @@ export default function App() {
         setTransactions(prev => [newTx, ...prev].slice(0, 5));
         setLastReport({ msg: `WIN: +${netProfit} TK`, color: 'text-emerald-400' });
         
-        setTimeout(() => setIsHit(false), 2500);
+        setTimeout(() => setIsHit(false), 2000);
       } else {
         setTotalPL(prev => prev - totalStake);
         setIsHit(false);
         const newLossCount = consecutiveLosses + 1;
         setConsecutiveLosses(newLossCount);
+        setEngineProtocol('LESS-HOT');
         
         const math = `-${totalStake} TK`;
         const newTx: Transaction = { type: 'LOSS', betType, amount: -totalStake, unit, time: timeStr, math };
@@ -109,11 +119,13 @@ export default function App() {
         if (newLossCount >= 3) {
           setCurrentUnit(prev => prev + 1);
           setConsecutiveLosses(0);
-          setLastReport({ msg: `STREAK LOSS: UNIT UP (${currentUnit + 1}x)`, color: 'text-red-500' });
+          setLastReport({ msg: `UNIT INCREASED (${currentUnit + 1}x)`, color: 'text-rose-500' });
         } else {
-          setLastReport({ msg: `LOSS: -${totalStake} TK`, color: 'text-red-400' });
+          setLastReport({ msg: `LOSS: -${totalStake} TK`, color: 'text-rose-400' });
         }
       }
+    } else {
+      setEngineProtocol('HOT');
     }
 
     setHistoryData(prev => {
@@ -136,6 +148,7 @@ export default function App() {
     setIsHit(false);
     activeBetRef.current = null;
     setLastReport(null);
+    setEngineProtocol('HOT');
   };
 
   const resetBankroll = () => {
@@ -160,234 +173,274 @@ export default function App() {
   };
 
   return (
-    <div className="casino-gradient p-3 md:p-6 lg:p-8 flex flex-col items-center">
-      <header className="w-full max-w-6xl mb-6 text-center">
-        <h1 className="text-3xl md:text-5xl font-black gold-text tracking-tighter uppercase italic drop-shadow-lg">
-          Roulette AI Engine
-        </h1>
-        <div className="flex justify-center gap-4 mt-2">
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">Corner: 1:8 Ratio</p>
-          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">6-Line: 1:5 Ratio</p>
+    <div className="max-w-[1600px] mx-auto p-4 lg:p-10 space-y-8 animate-in fade-in duration-1000">
+      
+      {/* Dynamic Header */}
+      <header className="flex flex-col md:flex-row justify-between items-center gap-6">
+        <div className="text-center md:text-left">
+          <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tighter gold-text gold-glow uppercase italic leading-none">
+            AI Engine <span className="text-white opacity-40">v3.0.4</span>
+          </h1>
+          <div className="flex items-center gap-3 mt-2 justify-center md:justify-start">
+            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <p className="text-[11px] text-slate-400 font-bold uppercase tracking-[0.3em]">
+              Real-time Analysis Sequence • {engineProtocol} PROTOCOL
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-4 items-center glass-card px-6 py-4 rounded-3xl">
+          <div className="flex flex-col items-center border-r border-white/10 pr-6">
+            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Total P/L</span>
+            <span className={`text-2xl font-black ${totalPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
+              {totalPL >= 0 ? '+' : ''}{totalPL} <span className="text-[10px] opacity-40">TK</span>
+            </span>
+          </div>
+          <div className="flex flex-col items-center">
+            <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Active Unit</span>
+            <span className="text-2xl font-black text-amber-400">{currentUnit}x</span>
+          </div>
         </div>
       </header>
 
-      <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      {/* Main Grid */}
+      <main className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         
-        <div className="lg:col-span-3 flex flex-col order-2 lg:order-1 gap-6">
-          <div className="bg-[#0f172a] border border-slate-800 p-5 rounded-3xl shadow-2xl flex flex-col h-[350px]">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-[11px] font-black text-amber-500 uppercase tracking-widest">History Log</h2>
-              <button onClick={clearHistory} className="text-[10px] text-red-500 hover:text-red-400 font-bold uppercase px-3 py-1 bg-red-500/10 rounded-full transition-colors">Clear</button>
+        {/* Left: Dashboard Stats */}
+        <div className="xl:col-span-3 space-y-8">
+          
+          <div className="glass-card p-6 rounded-[2rem] flex flex-col h-[400px]">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest">History Log</h2>
+              <button onClick={clearHistory} className="text-[10px] text-rose-500 hover:text-rose-400 font-black uppercase px-3 py-1 bg-rose-500/10 rounded-full transition-colors">Clear</button>
             </div>
             <textarea
-              className="flex-1 w-full bg-[#020617] border border-slate-800 rounded-2xl p-4 text-xs font-mono text-emerald-500 focus:outline-none focus:ring-1 focus:ring-amber-500/30 resize-none leading-relaxed"
-              placeholder="Database autocompletes from pad..."
+              className="flex-1 w-full bg-black/40 border border-white/5 rounded-2xl p-4 text-[13px] font-mono text-emerald-400 focus:outline-none focus:ring-1 focus:ring-amber-500/30 resize-none leading-relaxed shadow-inner no-scrollbar"
+              placeholder="Waiting for pad input..."
               value={historyData}
               onChange={(e) => setHistoryData(e.target.value)}
             />
           </div>
 
-          <div className="bg-[#0f172a] border border-slate-800 p-5 rounded-3xl shadow-2xl flex flex-col">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-[11px] font-black text-amber-500 uppercase tracking-widest">Bankroll Status</h2>
-              <button onClick={resetBankroll} className="text-[10px] text-slate-500 font-bold uppercase hover:text-white underline">Reset P/L</button>
+          <div className="glass-card p-6 rounded-[2rem]">
+            <h2 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-5">Ledger Math</h2>
+            <div className="space-y-3">
+              {transactions.map((tx, i) => (
+                <div key={i} className="group relative overflow-hidden bg-white/5 hover:bg-white/[0.08] p-4 rounded-2xl border border-white/5 transition-all duration-300">
+                  <div className="flex justify-between items-center relative z-10">
+                    <div className="flex flex-col">
+                      <span className={`text-[10px] font-black uppercase ${tx.type === 'WIN' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                        {tx.type} • {tx.betType === 'CORNER' ? 'CORNER' : '6-LINE'}
+                      </span>
+                      <span className="text-[13px] text-white/90 font-mono mt-1">{tx.math}</span>
+                    </div>
+                    <span className={`text-lg font-black ${tx.amount > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {tx.amount > 0 ? '+' : ''}{tx.amount}
+                    </span>
+                  </div>
+                  <div className="text-[9px] text-slate-600 font-bold mt-2 text-right uppercase tracking-wider">{tx.time}</div>
+                </div>
+              ))}
+              {transactions.length === 0 && (
+                <div className="text-center py-10">
+                  <p className="text-xs text-slate-600 font-bold uppercase tracking-widest italic">No Data recorded</p>
+                </div>
+              )}
             </div>
-            
-            <div className={`text-4xl font-black mb-1 tracking-tight ${totalPL >= 0 ? 'text-emerald-400 drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]' : 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.3)]'}`}>
-              {totalPL >= 0 ? '+' : ''}{totalPL}<span className="text-xs ml-1 text-slate-500">TK</span>
-            </div>
+          </div>
+        </div>
 
-            {lastReport && (
-              <div className={`text-[10px] font-black uppercase mb-4 py-1 px-3 rounded bg-white/5 inline-block ${lastReport.color}`}>
-                Last: {lastReport.msg}
+        {/* Center: The Massive Pad */}
+        <div className="xl:col-span-6 space-y-8">
+          
+          <div className="glass-card p-4 md:p-8 rounded-[3rem] relative overflow-hidden group">
+            
+            {/* Hit Overlay */}
+            {isHit && (
+              <div className="absolute inset-0 bg-emerald-500/30 backdrop-blur-md z-40 flex items-center justify-center animate-in fade-in zoom-in duration-300 border-8 border-emerald-400/50 rounded-[3rem]">
+                <div className="text-center">
+                  <h3 className="text-white text-8xl md:text-[10rem] font-black italic tracking-tighter drop-shadow-[0_0_50px_rgba(16,185,129,0.8)]">HIT!</h3>
+                  <p className="text-white text-xl font-bold uppercase tracking-[0.5em] mt-2">Target Sequence Verified</p>
+                </div>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                <p className="text-[8px] text-slate-500 uppercase font-black mb-1">Betting Unit</p>
-                <p className="text-xl font-black text-white">{currentUnit}x</p>
+            <div className="flex justify-between items-center mb-8 px-2">
+              <div className="flex items-center gap-4">
+                <span className="text-[11px] font-black text-amber-500 uppercase tracking-[0.4em]">Roulette Sequence Matrix</span>
+                <div className="h-[1px] w-12 bg-white/10 hidden md:block"></div>
               </div>
-              <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                <p className="text-[8px] text-slate-500 uppercase font-black mb-1">Loss Tracker</p>
-                <div className="flex gap-1.5 mt-2">
-                  {[1, 2, 3].map(i => (
-                    <div key={i} className={`h-2 flex-1 rounded-full transition-all duration-300 ${consecutiveLosses >= i ? 'bg-red-500' : 'bg-slate-800'}`}></div>
+              <div className="flex gap-2">
+                <button onClick={undoLast} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black text-slate-400 uppercase rounded-xl transition-all active:scale-90 border border-white/5">Undo</button>
+                <button onClick={clearSession} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-[10px] font-black text-slate-400 uppercase rounded-xl transition-all active:scale-90 border border-white/5">Reset</button>
+              </div>
+            </div>
+
+            <div className="relative p-1 md:p-3 bg-black/40 rounded-[2rem] border border-white/5 shadow-2xl overflow-x-auto no-scrollbar">
+              <div className="flex gap-2 md:gap-3 min-w-[700px] md:min-w-0">
+                
+                {/* Zero Cell */}
+                <button 
+                  onClick={() => addNumber(0)} 
+                  className="w-16 md:w-24 bg-emerald-600 hover:bg-emerald-500 rounded-2xl flex flex-col items-center justify-center border-b-4 border-emerald-800 shadow-xl roulette-button group"
+                >
+                  <span className="text-white text-3xl md:text-5xl font-black italic drop-shadow-lg group-hover:scale-110 transition-transform">0</span>
+                </button>
+
+                {/* Main Grid */}
+                <div className="flex-1 grid grid-rows-3 gap-2 md:gap-3">
+                  {ROULETTE_ROWS.map((row, rIdx) => (
+                    <div key={rIdx} className="grid grid-cols-12 gap-2 md:gap-3">
+                      {row.map(num => {
+                        const isRed = RED_NUMBERS.includes(num);
+                        return (
+                          <button
+                            key={num}
+                            onClick={() => addNumber(num)}
+                            className={`h-12 md:h-20 lg:h-24 rounded-xl md:rounded-2xl flex items-center justify-center border-b-4 shadow-xl roulette-button group ${
+                              isRed 
+                                ? 'bg-[#ef4444] border-rose-900 hover:bg-rose-500' 
+                                : 'bg-[#1e293b] border-slate-950 hover:bg-slate-700'
+                            }`}
+                          >
+                            <span className="text-white text-xl md:text-3xl font-black group-hover:scale-110 transition-transform">
+                              {num}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   ))}
                 </div>
               </div>
             </div>
+          </div>
 
-            <div className="space-y-2">
-               <p className="text-[9px] text-slate-600 font-black uppercase mb-1">Transaction Math</p>
-               {transactions.map((tx, i) => (
-                 <div key={i} className="flex flex-col bg-black/30 p-2 rounded-lg border border-slate-800/50">
-                    <div className="flex justify-between items-center text-[10px]">
-                      <span className={`font-black ${tx.type === 'WIN' ? 'text-emerald-500' : 'text-red-500'}`}>
-                        {tx.type} ({tx.betType === 'CORNER' ? 'CRN' : '6LN'})
-                      </span>
-                      <span className={`font-bold ${tx.amount > 0 ? 'text-emerald-400' : 'text-red-400'}`}>{tx.amount > 0 ? '+' : ''}{tx.amount} TK</span>
-                    </div>
-                    <div className="text-[9px] text-slate-600 font-mono mt-0.5 flex justify-between">
-                       <span>{tx.math}</span>
-                       <span>{tx.time}</span>
-                    </div>
-                 </div>
-               ))}
-               {transactions.length === 0 && <p className="text-[10px] text-slate-700 italic text-center py-4">Awaiting session activity...</p>}
+          <div className="glass-card p-6 rounded-[2rem]">
+            <h2 className="text-[11px] font-extrabold text-slate-400 uppercase tracking-widest mb-4">Session Stream</h2>
+            <div className="flex flex-wrap gap-2 md:gap-3">
+              {lastSpins.map((n, i) => (
+                <div 
+                  key={i} 
+                  className={`w-10 h-10 md:w-14 md:h-14 rounded-2xl flex items-center justify-center text-sm md:text-lg font-black shadow-lg border-b-2 transition-all animate-in slide-in-from-right-4 duration-300 ${
+                    RED_NUMBERS.includes(n) 
+                      ? 'bg-rose-700/80 border-rose-900 text-white' 
+                      : n === 0 
+                        ? 'bg-emerald-600/80 border-emerald-800 text-white' 
+                        : 'bg-slate-800 border-slate-950 text-white'
+                  }`}
+                >
+                  {n}
+                </div>
+              ))}
+              {lastSpins.length === 0 && <p className="text-slate-600 text-xs font-bold uppercase italic p-4">Waiting for initial spin data...</p>}
             </div>
           </div>
         </div>
 
-        <div className="lg:col-span-5 order-1 lg:order-2">
-          <div className="bg-[#0f172a] border border-slate-800 p-5 md:p-8 rounded-3xl shadow-2xl relative overflow-hidden">
-            {isHit && (
-              <div className="absolute inset-0 bg-emerald-500/20 pointer-events-none border-8 border-emerald-500/40 rounded-3xl z-30 animate-pulse flex items-center justify-center backdrop-blur-[2px]">
-                <span className="text-emerald-400 text-7xl md:text-9xl font-black rotate-[-12deg] drop-shadow-[0_0_40px_rgba(16,185,129,1)] scale-110">HIT!</span>
-              </div>
-            )}
-            
-            <h2 className="text-[11px] font-black text-amber-500 uppercase mb-6 text-center tracking-[0.4em]">
-              Numeric Entry Pad
-            </h2>
-            
-            <div className="grid grid-cols-3 gap-2 md:gap-3 mb-8">
-              <button 
-                onClick={() => addNumber(0)} 
-                className="col-span-3 py-5 bg-emerald-700 hover:bg-emerald-600 text-white font-black text-2xl rounded-2xl border-b-8 border-emerald-900 transition-all active:translate-y-2 active:border-b-0 shadow-2xl"
-              >
-                0
-              </button>
-              
-              {Array.from({ length: 36 }, (_, i) => {
-                const num = i + 1;
-                const isRed = RED_NUMBERS.includes(num);
-                return (
-                  <button
-                    key={num}
-                    onClick={() => addNumber(num)}
-                    className={`py-5 md:py-7 rounded-2xl font-black text-2xl border-b-8 transition-all active:translate-y-2 active:border-b-0 shadow-lg ${
-                      isRed 
-                        ? 'bg-red-700 hover:bg-red-600 border-red-900 text-white' 
-                        : 'bg-slate-800 hover:bg-slate-700 border-slate-950 text-white'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                );
-              })}
+        {/* Right: AI Prediction Engine */}
+        <div className="xl:col-span-3 space-y-8">
+          
+          <div className="glass-card p-8 rounded-[2rem] border-2 border-amber-500/20 relative overflow-hidden h-full flex flex-col">
+            <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+              <svg className="w-40 h-40" viewBox="0 0 24 24" fill="white">
+                <path d="M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M12,6A6,6 0 0,1 18,12A6,6 0 0,1 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6M12,8A4,4 0 0,0 8,12A4,4 0 0,0 12,16A4,4 0 0,0 16,12A4,4 0 0,0 12,8Z" />
+              </svg>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <button onClick={undoLast} className="py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-black rounded-2xl uppercase border border-slate-700 transition-all">Undo Last</button>
-              <button onClick={clearSession} className="py-4 bg-slate-900 hover:bg-slate-800 text-slate-400 text-xs font-black rounded-2xl uppercase border border-slate-700 transition-all">Reset Sequence</button>
-            </div>
-          </div>
-        </div>
-
-        <div className="lg:col-span-4 flex flex-col h-full order-3 gap-6">
-          <div className="bg-[#0f172a] border-2 border-amber-500/30 p-6 md:p-8 rounded-3xl shadow-2xl flex-1 flex flex-col relative overflow-hidden min-h-[500px]">
-            <div className="absolute top-0 left-0 w-full h-40 bg-gradient-to-b from-amber-500/10 to-transparent pointer-events-none"></div>
-            
-            <div className="flex flex-col gap-4 border-b border-slate-800 pb-5 mb-8">
+            <div className="flex flex-col gap-6 mb-8 relative z-10">
               <div className="flex justify-between items-center">
-                <h2 className="text-xs font-black text-amber-500 uppercase tracking-[0.3em]">AI Engine v3.0</h2>
-                <div className="flex bg-slate-900/80 p-1 rounded-full border border-slate-800">
-                  <button onClick={() => setMaxLines(1)} className={`px-2 py-1 rounded-full text-[8px] font-black uppercase transition-all ${maxLines === 1 ? 'bg-amber-500 text-slate-950' : 'text-slate-500'}`}>1 Bet</button>
-                  <button onClick={() => setMaxLines(2)} className={`px-2 py-1 rounded-full text-[8px] font-black uppercase transition-all ${maxLines === 2 ? 'bg-amber-500 text-slate-950' : 'text-slate-500'}`}>2 Bets</button>
+                <h2 className="text-xs font-black text-amber-500 uppercase tracking-[0.4em]">Prediction Ops</h2>
+                <div className="flex gap-1 bg-black/40 p-1 rounded-xl border border-white/5">
+                  <button onClick={() => setMaxLines(1)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${maxLines === 1 ? 'bg-amber-500 text-slate-900 shadow-lg' : 'text-slate-500'}`}>1X</button>
+                  <button onClick={() => setMaxLines(2)} className={`px-3 py-1.5 rounded-lg text-[9px] font-black uppercase transition-all ${maxLines === 2 ? 'bg-amber-500 text-slate-900 shadow-lg' : 'text-slate-500'}`}>2X</button>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <button 
                   onClick={() => setSelectedBetType('6-LINE')}
-                  className={`py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${selectedBetType === '6-LINE' ? 'bg-emerald-600/20 border-emerald-500 text-emerald-400' : 'border-slate-800 text-slate-500'}`}
+                  className={`py-3 rounded-2xl text-[10px] font-black uppercase border-2 transition-all flex justify-between px-6 items-center ${selectedBetType === '6-LINE' ? 'bg-emerald-600/10 border-emerald-500 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.1)]' : 'border-white/5 text-slate-600'}`}
                 >
-                  6-Line (1:5)
+                  <span>6-Line Matrix</span>
+                  <span className="opacity-40 italic">1:5</span>
                 </button>
                 <button 
                   onClick={() => setSelectedBetType('CORNER')}
-                  className={`py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${selectedBetType === 'CORNER' ? 'bg-amber-600/20 border-amber-500 text-amber-400' : 'border-slate-800 text-slate-500'}`}
+                  className={`py-3 rounded-2xl text-[10px] font-black uppercase border-2 transition-all flex justify-between px-6 items-center ${selectedBetType === 'CORNER' ? 'bg-amber-600/10 border-amber-500 text-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.1)]' : 'border-white/5 text-slate-600'}`}
                 >
-                  Corner (1:8)
+                  <span>Corner Grid</span>
+                  <span className="opacity-40 italic">1:8</span>
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 space-y-6">
+            <div className="flex-1 space-y-8 relative z-10">
               {!hasSearched ? (
-                <div className="h-full flex flex-col items-center justify-center text-center opacity-30 py-20">
-                  <div className="w-16 h-16 rounded-full border-4 border-dashed border-slate-600 animate-spin flex items-center justify-center mb-6">
-                    <div className="w-8 h-8 rounded-full bg-slate-700"></div>
-                  </div>
-                  <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest italic">Awaiting Spin Pattern...</p>
+                <div className="flex flex-col items-center justify-center py-20 opacity-20">
+                  <div className="w-20 h-20 rounded-full border-t-2 border-r-2 border-amber-500 animate-spin mb-6"></div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.3em] animate-pulse">Scanning History...</p>
                 </div>
               ) : !result ? (
-                <div className="h-full flex flex-col items-center justify-center text-center py-20">
-                  <div className="text-red-500 text-lg font-black uppercase tracking-widest bg-red-500/10 p-6 rounded-3xl border border-red-500/20 mb-4 italic">NO DATA MATCH</div>
-                  <p className="text-slate-500 text-[10px] font-bold leading-relaxed px-4">Pattern depth too shallow for {selectedBetType}. Try switching modes or adding more data.</p>
+                <div className="bg-rose-500/10 border border-rose-500/30 p-8 rounded-3xl text-center">
+                  <h4 className="text-rose-500 text-sm font-black uppercase tracking-widest mb-2 italic">Signal Lost</h4>
+                  <p className="text-slate-500 text-[10px] leading-relaxed font-bold uppercase tracking-wider">Protocol mismatch. Stabilizing sequence. Add more spin data for recovery.</p>
                 </div>
               ) : (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-700">
+                <div className="space-y-6 animate-in slide-in-from-bottom-10 duration-700">
                   
-                  <div className="bg-amber-500/5 border border-amber-500/20 p-5 rounded-2xl relative overflow-hidden">
-                     <div className="absolute top-0 right-0 p-2 opacity-10">
-                        <span className="text-4xl font-black">{selectedBetType === 'CORNER' ? 'CRN' : '6LN'}</span>
-                     </div>
-                     <div className="flex justify-between items-center mb-2">
-                        <p className="text-[10px] text-amber-500/60 font-black uppercase tracking-widest">Stake Advisory</p>
-                        <p className="text-[10px] text-emerald-500 font-black uppercase">Lv. {result.searchLevel}</p>
-                     </div>
-                     <div className="flex items-baseline gap-2">
-                        <span className="text-xs text-slate-500 uppercase font-black">Total:</span>
-                        <p className="text-3xl font-black text-white italic">{(currentUnit * BASE_STAKE * result.suggestedIds.length)} <span className="text-[10px] not-italic text-amber-500 uppercase tracking-widest font-bold ml-1">TK</span></p>
-                     </div>
-                     <div className="mt-4 pt-4 border-t border-slate-800/50 flex justify-between text-[10px]">
-                        <div className="flex flex-col">
-                           <span className="text-slate-600 font-black uppercase">Net (Win)</span>
-                           <span className="text-emerald-400 font-black">+{ (currentUnit * BASE_STAKE * (result.betType === 'CORNER' ? 8 : 5)) - (currentUnit * BASE_STAKE * (result.suggestedIds.length - 1)) } TK</span>
-                        </div>
-                        <div className="flex flex-col text-right">
-                           <span className="text-slate-600 font-black uppercase">Net (Loss)</span>
-                           <span className="text-red-500 font-black">-{ currentUnit * BASE_STAKE * result.suggestedIds.length } TK</span>
-                        </div>
-                     </div>
-                  </div>
+                  <div className={`p-6 rounded-3xl border transition-all duration-500 ${result.hotness === 'HOT' ? 'bg-amber-500/10 border-amber-500/40 shadow-xl shadow-amber-500/5' : 'bg-slate-900 border-white/5'}`}>
+                    <div className="flex justify-between items-center mb-6">
+                      <span className={`text-[10px] font-black uppercase tracking-[0.3em] ${result.hotness === 'HOT' ? 'text-amber-500' : 'text-slate-500'}`}>
+                        {result.hotness === 'HOT' ? 'HOT PATTERN FOUND' : 'STABILIZING CYCLE'}
+                      </span>
+                      <span className="bg-white/5 px-2 py-1 rounded text-[9px] text-slate-400 font-bold uppercase">DEPTH {result.searchLevel}</span>
+                    </div>
 
-                  <div className={`p-6 border-2 rounded-3xl text-center shadow-2xl transition-all duration-700 ${isHit ? 'bg-emerald-600 border-emerald-400 scale-105 shadow-emerald-500/40' : 'bg-slate-950 border-amber-500/50'}`}>
-                    <p className={`text-[11px] font-black uppercase mb-3 tracking-[0.4em] ${isHit ? 'text-white' : 'text-amber-500'}`}>
-                      {isHit ? 'TARGET HIT!' : 'SUGGESTED BET'}
-                    </p>
-                    <div className="space-y-1">
+                    <div className="space-y-3">
                       {result.suggestedIds.map(id => {
                         const betDef = (result.betType === 'CORNER' ? CORNERS : SIX_LINES).find(b => b.id === id);
                         return (
-                          <p key={id} className="text-2xl font-black text-white leading-tight uppercase italic">{betDef?.name}</p>
+                          <div key={id} className="text-3xl font-black text-white italic uppercase tracking-tighter">
+                            {betDef?.name}
+                          </div>
                         );
                       })}
+                    </div>
+
+                    <div className="mt-8 pt-6 border-t border-white/10 flex justify-between items-end">
+                      <div className="flex flex-col">
+                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Est. Win</span>
+                        <span className="text-2xl font-black text-emerald-400">
+                          +{ (currentUnit * BASE_STAKE * (result.betType === 'CORNER' ? 8 : 5)) - (currentUnit * BASE_STAKE * (result.suggestedIds.length - 1)) }
+                        </span>
+                      </div>
+                      <div className="flex flex-col text-right">
+                        <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest">Stake</span>
+                        <span className="text-lg font-black text-white/40">
+                          {(currentUnit * BASE_STAKE * result.suggestedIds.length)} TK
+                        </span>
+                      </div>
                     </div>
                   </div>
 
                   <div>
-                    <div className="flex justify-between mb-4">
-                      <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Winning Targets</p>
-                    </div>
-                    <div className="grid grid-cols-6 lg:grid-cols-4 xl:grid-cols-6 gap-2">
+                    <h5 className="text-[9px] text-slate-600 font-black uppercase tracking-[0.5em] mb-4">Winning Targets</h5>
+                    <div className="grid grid-cols-6 gap-2">
                       {result.suggestedNumbers.map(num => {
-                        const isFoundInHistory = result.foundNumbers.includes(num);
-                        const isCurrentLast = lastSpins[lastSpins.length - 1] === num;
-                        
+                        const isMatch = result.foundNumbers.includes(num);
+                        const isLast = lastSpins[lastSpins.length - 1] === num;
                         return (
                           <div 
                             key={num} 
-                            className={`aspect-square flex items-center justify-center rounded-xl text-xs md:text-sm font-black border transition-all duration-500 ${
-                              isCurrentLast 
-                                ? 'bg-emerald-500 border-emerald-300 text-white scale-125 shadow-[0_0_25px_rgba(16,185,129,1)] z-40' 
-                                : isFoundInHistory
-                                  ? 'bg-emerald-600 border-emerald-400 text-white shadow-[0_0_15px_rgba(16,185,129,0.5)] scale-110' 
-                                  : RED_NUMBERS.includes(num) 
-                                    ? 'bg-red-950/40 border-red-900/60 text-red-500/80' 
-                                    : 'bg-slate-950 border-slate-800 text-amber-500/20'
+                            className={`aspect-square flex items-center justify-center rounded-xl text-xs font-black border transition-all duration-700 ${
+                              isLast 
+                                ? 'bg-emerald-500 border-emerald-300 text-white scale-125 shadow-[0_0_20px_rgba(16,185,129,0.8)] z-20' 
+                                : isMatch
+                                  ? 'bg-emerald-600/50 border-emerald-500 text-white' 
+                                  : RED_NUMBERS.includes(num)
+                                    ? 'bg-rose-950/20 border-rose-900/40 text-rose-800'
+                                    : 'bg-black/20 border-white/5 text-slate-800'
                             }`}
                           >
                             {num}
@@ -400,34 +453,23 @@ export default function App() {
               )}
             </div>
 
-            {lastSpins.length > 0 && (
-              <div className="mt-auto pt-6 border-t border-slate-800/80">
-                <p className="text-[10px] text-slate-600 uppercase font-black mb-5 tracking-[0.4em] text-center">Last Sequence</p>
-                <div className="flex flex-wrap justify-center gap-2">
-                  {lastSpins.map((n, i) => (
-                    <div 
-                      key={i} 
-                      className={`w-7 h-7 md:w-9 md:h-9 rounded-full flex items-center justify-center text-xs md:text-sm font-black shadow-xl border transition-all ${
-                        RED_NUMBERS.includes(n) 
-                          ? 'bg-red-700/80 border-red-500 text-white' 
-                          : n === 0 
-                            ? 'bg-emerald-600/80 border-emerald-400 text-white' 
-                            : 'bg-slate-900 border-slate-700 text-white'
-                      }`}
-                    >
-                      {n}
-                    </div>
-                  ))}
+            <div className="mt-auto pt-8 border-t border-white/5">
+              <div className="bg-white/5 rounded-2xl p-4 flex items-center gap-4">
+                <div className={`h-3 w-3 rounded-full ${consecutiveLosses > 0 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,1)]'}`}></div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Engine Status</span>
+                  <span className="text-[11px] text-white/90 font-bold uppercase">{consecutiveLosses > 0 ? `${consecutiveLosses} Sequential Losses` : 'Signal Strength Optimal'}</span>
                 </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
       </main>
 
-      <footer className="mt-16 mb-8 text-slate-800 text-[10px] uppercase font-black tracking-[0.6em] opacity-30 text-center">
-        Proprietary Engine - Professional Series - v3.0.1
+      <footer className="pt-12 pb-6 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-600 font-black uppercase tracking-[0.6em]">
+        <span>Proprietary Engine • 2025 Series</span>
+        <span>Secure Protocol 3.0.4 • Optimized for Desktop</span>
       </footer>
     </div>
   );

@@ -19,7 +19,8 @@ export const analyzeStrategy = (
   history: number[],
   lastSpins: number[],
   maxBets: number = 1,
-  betType: '6-LINE' | 'CORNER' = '6-LINE'
+  betType: '6-LINE' | 'CORNER' = '6-LINE',
+  forceHotness?: 'HOT' | 'LESS-HOT'
 ): StrategyResult | null => {
   if (history.length === 0 || lastSpins.length < 1) return null;
 
@@ -62,10 +63,22 @@ export const analyzeStrategy = (
     .map(([id, count]) => ({ id: parseInt(id), count }))
     .sort((a, b) => b.count - a.count);
 
-  const selectedBetIds = sortedBets.slice(0, maxBets).map(b => b.id);
-  
-  if (selectedBetIds.length === 0) return null;
+  if (sortedBets.length === 0) return null;
 
+  // Logic for Hot vs Less Hot
+  // Hot = Top results
+  // Less Hot = Secondary results (skipping top if available)
+  let finalBets = [];
+  let currentHotness: 'HOT' | 'LESS-HOT' = forceHotness || 'HOT';
+
+  if (currentHotness === 'LESS-HOT' && sortedBets.length > maxBets) {
+    finalBets = sortedBets.slice(maxBets, maxBets * 2);
+  } else {
+    finalBets = sortedBets.slice(0, maxBets);
+    currentHotness = 'HOT'; // Default to hot if secondary isn't available
+  }
+
+  const selectedBetIds = finalBets.map(b => b.id);
   const source = betType === '6-LINE' ? SIX_LINES : CORNERS;
   const suggestedNumbers = source
     .filter(bet => selectedBetIds.includes(bet.id))
@@ -78,6 +91,7 @@ export const analyzeStrategy = (
     suggestedIds: selectedBetIds,
     suggestedNumbers: Array.from(new Set(suggestedNumbers)),
     foundNumbers: Array.from(new Set(matches)),
-    betType
+    betType,
+    hotness: currentHotness
   };
 };

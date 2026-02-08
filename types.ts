@@ -6,6 +6,7 @@ export interface StrategyResult {
   suggestedNumbers: number[];
   foundNumbers: number[];
   betType: '6-LINE' | 'CORNER';
+  hotness: 'HOT' | 'LESS-HOT';
 }
 
 export interface BetDefinition {
