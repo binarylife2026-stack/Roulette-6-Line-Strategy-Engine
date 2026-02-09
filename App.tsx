@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { parseNumberInput, analyzeStrategy, EnhancedStrategyResult } from './services/StrategyEngine';
 import { SIX_LINES, CORNERS } from './types';
-import { TrendingUp, Flame, History, Snowflake, RotateCcw, Undo2, BrainCircuit, Coins, ShieldCheck, Activity, Target, Zap, Info, Trash2, Layers, CheckCircle2, XCircle, Gauge, ChevronRight, RefreshCw, BarChart3, AlertCircle, Fingerprint, SearchCheck } from 'lucide-react';
+import { TrendingUp, Flame, History, Snowflake, RotateCcw, Undo2, BrainCircuit, Coins, ShieldCheck, Activity, Target, Zap, Info, Trash2, Layers, CheckCircle2, XCircle, Gauge, ChevronRight, RefreshCw, BarChart3, AlertCircle, Fingerprint, SearchCheck, ShieldAlert, Waves } from 'lucide-react';
 
 const RED_NUMBERS = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
 const STAKE_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50, 75, 100];
@@ -40,13 +40,8 @@ export default function App() {
     depth: number
   } | null>(null);
 
-  const intelligence = useMemo(() => {
-    const allNums = [...parseNumberInput(historyData), ...lastSpins];
-    const counts: Record<number, number> = {};
-    for (let i = 0; i <= 36; i++) counts[i] = 0;
-    allNums.forEach(n => { if (counts[n] !== undefined) counts[n]++; });
-    
-    const missingStreaks = SIX_LINES.map(line => {
+  const missingStreaks = useMemo(() => {
+    return SIX_LINES.map(line => {
       let streak = 0;
       for (let i = lastSpins.length - 1; i >= 0; i--) {
         if (line.numbers.includes(lastSpins[i])) break;
@@ -54,24 +49,13 @@ export default function App() {
       }
       return { id: line.id, name: line.name, streak };
     }).sort((a,b) => b.streak - a.streak);
-
-    const sorted = Object.entries(counts)
-      .map(([num, count]) => ({ num: parseInt(num), count }))
-      .sort((a, b) => b.count - a.count);
-
-    return {
-      hot: sorted.slice(0, 5),
-      cold: sorted.slice(-5).reverse(),
-      missing: missingStreaks
-    };
-  }, [historyData, lastSpins]);
+  }, [lastSpins]);
 
   useEffect(() => {
     const trimmedHistory = historyData.trim();
     if (trimmedHistory !== '' && lastSpins.length >= 1) {
       const parsedHistory = parseNumberInput(trimmedHistory);
-      // Always perform deep scan with a high limit (15) for best possible match
-      const analysis = analyzeStrategy(parsedHistory, lastSpins, 1, selectedBetType, 15);
+      const analysis = analyzeStrategy(parsedHistory, lastSpins, 1, selectedBetType, missingStreaks);
       
       if (analysis) {
         setResult(analysis);
@@ -90,7 +74,7 @@ export default function App() {
       setResult(null);
       activeBetRef.current = null;
     }
-  }, [historyData, lastSpins, currentUnit, selectedBetType, baseStake]);
+  }, [historyData, lastSpins, currentUnit, selectedBetType, baseStake, missingStreaks]);
 
   const addNumber = (num: number) => {
     if (activeBetRef.current) {
@@ -114,7 +98,6 @@ export default function App() {
         setLossStreak(newStreak);
         setOutcomeHistory(prev => [{ result: 'MISS' as const, depth, num }, ...prev].slice(0, 5));
         
-        // Progression units: Increase unit every 3 losses
         if (newStreak > 0 && newStreak % 3 === 0) {
           setCurrentUnit(prev => prev + 1);
         }
@@ -129,7 +112,7 @@ export default function App() {
 
     setLastSpins(prev => {
       const next = [...prev, num];
-      return next.length > 20 ? next.slice(1) : next;
+      return next.length > 50 ? next.slice(1) : next;
     });
   };
 
@@ -166,15 +149,15 @@ export default function App() {
         <div className="max-w-[1800px] mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-200 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <BrainCircuit className="text-slate-950 w-7 h-7" />
+              <ShieldCheck className="text-slate-950 w-7 h-7" />
             </div>
             <div>
               <h1 className="text-2xl font-black tracking-tighter uppercase italic gold-text">
-                AI ENGINE <span className="text-slate-500 not-italic font-medium text-sm ml-2">v5.1 DEEP-SCAN</span>
+                PRO AI EXPERT <span className="text-slate-500 not-italic font-medium text-sm ml-2">v5.5</span>
               </h1>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className={`flex h-2 w-2 rounded-full animate-pulse ${lossStreak === 0 ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{lossStreak === 0 ? 'SYNCED' : `STREAK: -${lossStreak}`}</span>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{lossStreak === 0 ? 'TABLE STABLE' : `RISK LEVEL: ${lossStreak}`}</span>
               </div>
             </div>
           </div>
@@ -182,13 +165,13 @@ export default function App() {
           <div className="flex gap-4 items-center">
             <div className="flex items-center gap-3 bg-black/40 px-5 py-3 rounded-2xl border border-white/5 shadow-2xl">
               <div className="flex flex-col border-r border-white/10 pr-5">
-                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Session P/L</span>
+                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Session Profit</span>
                 <span className={`text-xl font-black leading-none ${totalPL >= 0 ? 'text-emerald-400' : 'text-rose-500'}`}>
                   {totalPL >= 0 ? '+' : ''}{totalPL} <span className="text-[10px] text-slate-500 ml-1">TK</span>
                 </span>
               </div>
               <div className="flex flex-col items-center pl-2">
-                <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-1">Unit Power</span>
+                <span className="text-[8px] font-black text-amber-500 uppercase tracking-widest mb-1">Bet Power</span>
                 <span className="text-xl font-black text-white leading-none">x{currentUnit}</span>
               </div>
             </div>
@@ -198,15 +181,34 @@ export default function App() {
 
       <main className="max-w-[1800px] mx-auto w-full px-4 lg:px-8 pb-12 grid grid-cols-1 xl:grid-cols-12 gap-8 flex-grow">
         
-        {/* Left: Engine Config */}
+        {/* Left: Professional Analytics */}
         <aside className="xl:col-span-3 space-y-6 flex flex-col h-full">
-          <section className="glass-card p-6 rounded-[2.5rem] flex flex-col h-[200px]">
+          
+          {/* Stability Meter */}
+          <section className="glass-card p-6 rounded-[2.5rem] bg-slate-900/40 border border-white/5">
+            <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
+               <Waves className="w-4 h-4 text-sky-400" /> Table Stability Index
+            </h2>
+            <div className="flex flex-col items-center py-2">
+               <div className="relative w-32 h-16 overflow-hidden">
+                 <div className="absolute inset-0 rounded-t-full border-[10px] border-slate-800"></div>
+                 <div 
+                   className={`absolute inset-0 rounded-t-full border-[10px] transition-all duration-1000 origin-bottom ${result && result.stability > 60 ? 'border-emerald-500' : result && result.stability > 30 ? 'border-amber-500' : 'border-rose-500'}`}
+                   style={{ transform: `rotate(${(result?.stability || 0) * 1.8 - 180}deg)` }}
+                 ></div>
+                 <div className="absolute bottom-0 left-1/2 -translate-x-1/2 text-lg font-black">{result?.stability || 0}%</div>
+               </div>
+               <span className="text-[9px] font-black text-slate-500 uppercase mt-2">{result && result.stability < 35 ? 'DANGEROUS SCATTER' : 'PREDICTABLE RANGE'}</span>
+            </div>
+          </section>
+
+          <section className="glass-card p-6 rounded-[2.5rem] flex flex-col h-[180px]">
             <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-3">
-              <History className="w-4 h-4 text-amber-500" /> Pattern Memory
+              <History className="w-4 h-4 text-amber-500" /> Raw History Stream
             </h2>
             <textarea
               className="w-full h-full bg-black/40 border border-white/5 rounded-3xl p-5 text-[14px] font-mono text-emerald-400 focus:outline-none focus:ring-2 focus:ring-amber-500/20 resize-none leading-relaxed no-scrollbar shadow-inner"
-              placeholder="Paste historical data here..."
+              placeholder="Paste data for deep scan..."
               value={historyData}
               onChange={(e) => setHistoryData(e.target.value)}
             />
@@ -214,26 +216,14 @@ export default function App() {
 
           <section className="glass-card p-6 rounded-[2.5rem] bg-slate-900/30">
             <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
-               <SearchCheck className="w-4 h-4 text-emerald-400" /> Pattern Intelligence
-            </h2>
-            <div className="space-y-4">
-              <div className="p-4 bg-black/40 rounded-2xl border border-white/5">
-                <span className="text-[9px] font-black text-slate-500 uppercase block mb-2">Max Match Scan</span>
-                <div className="text-white font-black text-lg italic">15-Step Universal Scan</div>
-                <span className="text-[8px] text-emerald-500 uppercase font-bold tracking-widest mt-1 block">Active & Monitoring</span>
-              </div>
-            </div>
-          </section>
-
-          <section className="glass-card p-6 rounded-[2.5rem] bg-slate-900/30">
-            <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2 mb-4">
-               <BarChart3 className="w-4 h-4 text-sky-400" /> Sector Analysis
+               <BarChart3 className="w-4 h-4 text-sky-400" /> Sector Gravity (Missing)
             </h2>
             <div className="space-y-2">
-              {intelligence.missing.slice(0, 4).map((item, i) => (
+              {missingStreaks.slice(0, 4).map((item, i) => (
                 <div key={i} className="flex items-center justify-between p-2.5 bg-black/40 rounded-xl border border-white/5">
                   <span className="text-[11px] font-black text-white uppercase italic">{item.name}</span>
                   <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-slate-500 font-bold">MISSING</span>
                     <span className={`text-sm font-black ${item.streak > 12 ? 'text-rose-500 animate-pulse' : item.streak > 8 ? 'text-amber-500' : 'text-emerald-500'}`}>{item.streak}</span>
                   </div>
                 </div>
@@ -243,20 +233,18 @@ export default function App() {
 
           <section className="glass-card p-6 rounded-[2.5rem] flex flex-col flex-grow">
             <h2 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-               <TrendingUp className="w-4 h-4 text-emerald-500" /> Result History
+               <TrendingUp className="w-4 h-4 text-emerald-500" /> Performance Log
             </h2>
             <div className="space-y-3">
-              {outcomeHistory.length > 0 ? outcomeHistory.map((item, idx) => (
-                <div key={idx} className={`flex items-center justify-between p-3 rounded-2xl border ${item.result === 'HIT' ? 'bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.05)]' : 'bg-rose-500/10 border-rose-500/20 opacity-70'}`}>
+              {outcomeHistory.map((item, idx) => (
+                <div key={idx} className={`flex items-center justify-between p-3 rounded-2xl border ${item.result === 'HIT' ? 'bg-emerald-500/10 border-emerald-500/20' : 'bg-rose-500/10 border-rose-500/20 opacity-70'}`}>
                   <div className="flex items-center gap-2">
                     {item.result === 'HIT' ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <XCircle className="w-4 h-4 text-rose-500" />}
-                    <span className={`text-[10px] font-black uppercase ${item.result === 'HIT' ? 'text-emerald-400' : 'text-rose-400'}`}>{item.result} ({item.depth}B)</span>
+                    <span className={`text-[10px] font-black uppercase ${item.result === 'HIT' ? 'text-emerald-400' : 'text-rose-400'}`}>{item.result}</span>
                   </div>
                   <span className="text-white font-black text-sm">#{item.num}</span>
                 </div>
-              )) : (
-                <div className="py-8 text-center opacity-20 text-[10px] uppercase font-black italic tracking-[0.2em]">Ready for stream...</div>
-              )}
+              ))}
             </div>
           </section>
         </aside>
@@ -273,14 +261,14 @@ export default function App() {
 
             <header className="flex justify-between items-center mb-8">
                <div className="px-4 py-2 bg-black/60 rounded-2xl border border-white/5 flex items-center gap-3">
-                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Input String</span>
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Table Stream</span>
                   <div className="flex gap-1">
-                    {lastSpins.slice(-5).map((n, i) => (
-                      <div key={i} className={`w-6 h-6 rounded-md border flex items-center justify-center text-[11px] font-black ${RED_NUMBERS.includes(n) ? 'bg-rose-500/20 border-rose-500/40 text-rose-400' : n === 0 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-slate-500/10 border-slate-500/40 text-white'}`}>{n}</div>
+                    {lastSpins.slice(-6).map((n, i) => (
+                      <div key={i} className={`w-7 h-7 rounded-md border flex items-center justify-center text-[12px] font-black ${RED_NUMBERS.includes(n) ? 'bg-rose-500/20 border-rose-500/40 text-rose-400' : n === 0 ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-400' : 'bg-slate-500/10 border-slate-500/40 text-white'}`}>{n}</div>
                     ))}
                   </div>
                </div>
-               <h3 className="text-[11px] font-black text-amber-500/80 uppercase tracking-[0.4em] px-6 py-2 bg-black/40 rounded-full border border-white/5">Pattern Interface</h3>
+               <h3 className="text-[11px] font-black text-amber-500/80 uppercase tracking-[0.4em] px-6 py-2 bg-black/40 rounded-full border border-white/5">Pro Interface v5.5</h3>
             </header>
 
             {/* Roulette Matrix */}
@@ -314,20 +302,20 @@ export default function App() {
                  <Undo2 className="w-5 h-5 group-hover:-rotate-45 transition-transform" /> Undo
                </button>
                <button onClick={handleFullReset} className="flex-1 max-w-[200px] flex items-center justify-center gap-3 py-5 rounded-[2rem] bg-rose-500/10 hover:bg-rose-500 hover:text-white border border-rose-500/20 text-rose-500 font-black uppercase text-[11px] tracking-widest transition-all active:scale-95 shadow-xl group">
-                 <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" /> Reset All
+                 <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-500" /> Hard Reset
                </button>
             </div>
 
-            {/* AI Insight Status */}
-            <div className="mt-10 p-6 rounded-[3rem] bg-black/60 border border-white/5 flex items-center justify-between shadow-2xl overflow-hidden relative">
+            {/* Expert Advice Status */}
+            <div className={`mt-10 p-6 rounded-[3rem] border transition-all duration-500 flex items-center justify-between shadow-2xl overflow-hidden relative ${result && result.stability < 35 ? 'bg-rose-500/10 border-rose-500/30' : 'bg-black/60 border-white/5'}`}>
               <div className="flex items-center gap-5 z-10">
-                <div className="w-14 h-14 rounded-[1.5rem] bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-                  <Fingerprint className="w-7 h-7 text-amber-500" />
+                <div className={`w-14 h-14 rounded-[1.5rem] flex items-center justify-center border ${result && result.stability < 35 ? 'bg-rose-500/20 border-rose-500/30' : 'bg-amber-500/10 border-amber-500/20'}`}>
+                  {result && result.stability < 35 ? <ShieldAlert className="w-7 h-7 text-rose-500" /> : <BrainCircuit className="w-7 h-7 text-amber-500" />}
                 </div>
                 <div>
-                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 italic">Neural Sequence Matching</span>
-                   <p className="text-base font-black text-white italic tracking-tight">
-                     {result ? `Confirmed longest match: ${result.searchLevel} numbers found in historical stream.` : 'Awaiting data for pattern correlation...'}
+                   <span className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 italic">Expert Pro Advice</span>
+                   <p className={`text-base font-black italic tracking-tight ${result && result.stability < 35 ? 'text-rose-400 animate-pulse' : 'text-white'}`}>
+                     {result ? result.expertAdvice : 'Monitoring table frequency for strategic entry...'}
                    </p>
                 </div>
               </div>
@@ -335,11 +323,11 @@ export default function App() {
           </div>
         </section>
 
-        {/* Right: Signal Output */}
+        {/* Right: Expert Signal Dashboard */}
         <aside className="xl:col-span-3 space-y-6 flex flex-col h-full">
           <section className="glass-card p-8 rounded-[3rem] border-2 border-amber-500/10 flex-grow flex flex-col relative overflow-hidden h-full shadow-2xl">
             
-            {/* Signal Strength & Metadata */}
+            {/* Confidence & Provenance */}
             {result && (
               <div className="mb-8 p-6 rounded-[2.5rem] bg-black/60 border border-white/10 relative overflow-hidden text-center">
                  <span className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-500 block mb-2">Confidence Level</span>
@@ -400,8 +388,8 @@ export default function App() {
                     </div>
                     <div className="mb-4 text-center">
                       <div className="mb-4 p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 flex flex-col items-center">
-                        <span className="text-[9px] font-black text-amber-500/60 uppercase tracking-[0.2em] mb-1">Signal Base</span>
-                        <span className="text-xl font-black text-white italic tracking-tighter">{result.searchLevel} NUMBER MATCH</span>
+                        <span className="text-[9px] font-black text-amber-500/60 uppercase tracking-[0.2em] mb-1">Signal Strategy</span>
+                        <span className="text-xl font-black text-white italic tracking-tighter uppercase">{result.betType} #{result.suggestedIds[0]}</span>
                       </div>
 
                       {result.suggestedIds.map((id: number) => {
@@ -412,7 +400,7 @@ export default function App() {
                   </div>
                   
                   <div>
-                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block flex items-center gap-3">Predicted Matrix <div className="h-px flex-1 bg-white/5"></div></span>
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4 block flex items-center gap-3">Prediction Matrix <div className="h-px flex-1 bg-white/5"></div></span>
                     <div className="grid grid-cols-6 gap-2">
                       {result.suggestedNumbers.map((num: number) => (
                         <div key={num} className={`aspect-square flex items-center justify-center rounded-xl text-[12px] font-black border-2 transition-all duration-500 ${result.foundNumbers.includes(num) ? 'bg-emerald-500/20 border-emerald-500 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]' : 'bg-black/40 border-white/5 text-slate-700'}`}>

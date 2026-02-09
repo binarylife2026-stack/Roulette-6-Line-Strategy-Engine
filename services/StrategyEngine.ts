@@ -20,6 +20,8 @@ export interface EnhancedStrategyResult extends StrategyResult {
   matchCount: number;
   isHotTrend: boolean;
   triggerSequence: number[];
+  stability: number;
+  expertAdvice: string;
 }
 
 export const analyzeStrategy = (
@@ -27,16 +29,21 @@ export const analyzeStrategy = (
   lastSpins: number[],
   maxBets: number = 1,
   betType: '6-LINE' | 'CORNER' = '6-LINE',
-  targetDepth: number = 3
+  missingData: { id: number, streak: number }[] = []
 ): EnhancedStrategyResult | null => {
   if (history.length === 0 || lastSpins.length < 1) return null;
 
-  let searchLevel = Math.min(lastSpins.length, targetDepth);
+  // 1. Calculate Table Stability (Scatter analysis)
+  // Logic: Are numbers hitting close to each other in terms of 6-line sectors?
+  const recentBets = lastSpins.slice(-5).map(n => getBetsForNumber(n, '6-LINE')[0]);
+  const uniqueSectors = new Set(recentBets).size;
+  const stability = Math.max(0, 100 - (uniqueSectors * 15));
+
+  let searchLevel = Math.min(lastSpins.length, 12); // Deep scan limit
   let matches: number[] = []; 
   let actualSearchLevel = 0;
   let triggerSequence: number[] = [];
 
-  // Progressive deep scan
   while (searchLevel >= 1) {
     const sequenceToMatch = lastSpins.slice(lastSpins.length - searchLevel);
     matches = [];
@@ -71,39 +78,52 @@ export const analyzeStrategy = (
   });
 
   const sortedBets = Object.entries(betFrequencies)
-    .map(([id, count]) => ({ id: parseInt(id), count }))
+    .map(([id, count]) => {
+      const betId = parseInt(id);
+      const missingInfo = missingData.find(m => m.id === betId);
+      // Sector Gravity: Bonus weight if it hasn't hit for a while
+      const gravityBonus = missingInfo ? Math.min(missingInfo.streak / 2, 5) : 0;
+      return { id: betId, count: count + gravityBonus, rawCount: count };
+    })
     .sort((a, b) => b.count - a.count);
 
   if (sortedBets.length === 0) return null;
 
-  const finalBets = sortedBets.slice(0, maxBets);
-  const selectedBetIds = finalBets.map(b => b.id);
+  const selectedBetId = sortedBets[0].id;
   const source = betType === '6-LINE' ? SIX_LINES : CORNERS;
-  const suggestedNumbers = source
-    .filter(bet => selectedBetIds.includes(bet.id))
-    .flatMap(bet => bet.numbers);
+  const suggestedNumbers = source.find(b => b.id === selectedBetId)?.numbers || [];
 
-  // Advanced Confidence Score
-  const matchVolume = matches.length;
-  const bestBetCount = sortedBets[0].count;
-  const volumeBonus = Math.min(matchVolume * 5, 25);
-  const depthBonus = actualSearchLevel * 12;
-  const consistencyBonus = (bestBetCount / matchVolume) * 45;
+  // Confidence Calculation 2.5 (Professional Weighting)
+  const baseConfidence = (actualSearchLevel * 10) + (sortedBets[0].rawCount * 8);
+  const stabilityModifier = stability > 60 ? 1.2 : stability < 30 ? 0.6 : 1.0;
+  let confidence = Math.round(baseConfidence * stabilityModifier);
   
-  const confidence = Math.min(Math.round(volumeBonus + depthBonus + consistencyBonus), 99);
-  const isHotTrend = bestBetCount > 2;
+  // Cap at 99%
+  confidence = Math.min(confidence, 99);
+
+  // Expert Advice Generation
+  let expertAdvice = "Pattern identified. Proceed with standard unit.";
+  if (stability < 30) {
+    expertAdvice = "CRITICAL: High table variance detected. Wait for 2 spins.";
+  } else if (confidence > 85) {
+    expertAdvice = "STRONG SIGNAL: Pattern + Sector Gravity align perfectly.";
+  } else if (actualSearchLevel < 2) {
+    expertAdvice = "WEAK SIGNAL: Short sequence match. Bet small or skip.";
+  }
 
   return {
     searchLevel: actualSearchLevel,
-    patternMatches: matchVolume,
-    suggestedIds: selectedBetIds,
-    suggestedNumbers: Array.from(new Set(suggestedNumbers)).sort((a,b) => a-b),
+    patternMatches: matches.length,
+    suggestedIds: [selectedBetId],
+    suggestedNumbers: suggestedNumbers.sort((a,b) => a-b),
     foundNumbers: Array.from(new Set(matches)),
     betType,
     hotness: confidence > 80 ? 'HOT' : 'LESS-HOT',
     confidence,
-    matchCount: bestBetCount,
-    isHotTrend,
-    triggerSequence
+    matchCount: sortedBets[0].rawCount,
+    isHotTrend: sortedBets[0].rawCount > 2,
+    triggerSequence,
+    stability,
+    expertAdvice
   };
 };
